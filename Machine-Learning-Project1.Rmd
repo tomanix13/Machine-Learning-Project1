@@ -1,0 +1,90 @@
+# Practical Machine Learning
+# Prediction Assignment Writeup
+
+This document describe the analysis done for the prediction assignment of the practical machine learning course.
+
+Some options, remove the many warnings:
+
+```{r}
+options(warn = -1)
+```
+
+List the librarys used:
+caret -> See (http://cran.r-project.org/web/packages/caret/index.html)
+
+randomForest -> See (http://cran.r-project.org/web/packages/randomForest/index.html)
+
+Hmisk -> (http://cran.r-project.org/web/packages/Hmisc/index.html)
+
+foreach ->(http://cran.r-project.org/web/packages/foreach/index.html)
+
+doParallel -> (http://cran.r-project.org/web/packages/doParallel/index.html)
+
+e1071 -> Not sure why but I had to load this library 
+
+
+```{r}
+library(caret)
+library(randomForest)
+library(Hmisc)
+library(foreach)
+library(doParallel)
+library(e1071)
+```
+
+Set a seed value:
+
+```{r}
+set.seed(4321)
+```
+
+First load the csv file and analise the data :
+
+```{r}
+<<eval=TRUE>>
+data <- read.csv("./pml-training.csv")
+summary(data)
+```
+
+There are a lot of characters ("#DIV/0!") and missing data.
+So the csv file will be reimported ignoring the ("#DIV/0!") and 
+use numeric values:
+
+```{r}
+mydata <- read.csv("./pml-training.csv", na.strings=c("#DIV/0!") )
+cData <- mydata
+for(i in c(8:ncol(cData)-1)) {cData[,i] = as.numeric(as.character(cData[,i]))}
+```
+
+Also use only the complete columns and get rid of some useless features like, timestamps, new\_window or num\_window
+
+```{r}
+txfeatures <- colnames(cData[colSums(is.na(cData)) == 0])[-(1:7)]
+features <- cData[txfeatures]
+```
+
+Now that the data is "clean" split the data for training and testing.
+
+```{r}
+txdata <- createDataPartition(y=features$classe, p=3/4, list=FALSE )
+training <- features[txdata,]
+testing <- features[-txdata,]
+```
+
+Next train a classifier with the training data using the parallel processing loaded previously:
+
+```{r}
+registerDoParallel()
+mymodel <- foreach(ntree=rep(150, 4), .combine=randomForest::combine) %dopar% randomForest(training[-ncol(training)], training$classe, ntree=ntree)
+```
+
+Now evaluate the model using the confusionmatrix method:
+
+```{r}
+predictionsTrain <- predict(mymodel, newdata=training)
+confusionMatrix(predictionsTrain,training$classe)
+predictionsTest <- predict(mymodel, newdata=testing)
+confusionMatrix(predictionsTest,testing$classe)
+```
+
+The Accuracy is 0,992 and all the other features, namely sensitivity & specificity have good values, so the model seems pretty good !!
